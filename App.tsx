@@ -1,146 +1,107 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { Sidebar as RightSidebar } from './components/Sidebar';
+import React, { useState, useMemo } from 'react';
 import { ChatWindow } from './components/ChatWindow';
 import { InputBar } from './components/InputBar';
-import { LiveConversation } from './components/LiveConversation';
-import { generateChatResponse, generateImage } from './services/geminiService';
-import type { Message, Mode, ImageData } from './types';
-import { Sender, Mode as ModeEnum } from './types';
+// Fix: Removed unused import for LiveConversation as the component file is empty and not used.
+import { WelcomeHeader } from './components/WelcomeHeader';
+import { Message, ModelType } from './types';
+import { sendMessageStream } from './services/geminiService';
 
-const App: React.FC = () => {
-  const [mode, setMode] = useState<Mode>(ModeEnum.Chat);
+function App() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [hasStartedChat, setHasStartedChat] = useState<boolean>(false);
-  const chatHistory = useRef<{ role: string; parts: { text: string }[] }[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<ModelType>('flash');
 
-  const handleSendMessage = useCallback(async (text: string, image?: ImageData | null) => {
-    if (!text && !image) return;
+  // Fix: Added explicit type to 'history' to resolve type mismatch error.
+  const history: { role: 'user' | 'model'; parts: { text: string }[] }[] = useMemo(() => {
+    return messages
+      .filter(m => !m.isStreaming)
+      .map(m => ({
+        role: m.sender === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }],
+      }));
+  }, [messages]);
 
+  const handleSendMessage = async (text: string, image: string | null) => {
+    if (!text.trim() && !image) return;
+
+    const userMessage: Message = { id: crypto.randomUUID(), text, sender: 'user', image };
+    setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      sender: Sender.User,
-      text: text,
-      image: image?.base64
-    };
+    const botMessageId = crypto.randomUUID();
+    const botMessage: Message = { id: botMessageId, text: '', sender: 'bot', isStreaming: true, sources: [] };
+    setMessages((prev) => [...prev, botMessage]);
 
-    if (!hasStartedChat) {
-      setHasStartedChat(true);
-      setMessages([userMessage]);
-    } else {
-      setMessages(prev => [...prev, userMessage]);
-    }
-    
-    if (mode !== ModeEnum.ImageUnderstand) {
-         chatHistory.current.push({ role: 'user', parts: [{ text }] });
-    }
-
-    let aiResponse: Message | null = null;
     try {
-      if (mode === ModeEnum.ImageGen) {
-        const generatedImageBase64 = await generateImage(text);
-        aiResponse = {
-          id: Date.now().toString() + '-ai',
-          sender: Sender.AI,
-          text: `Here is the generated image for: "${text}"`,
-          image: generatedImageBase64
-        };
-      } else {
-        const { text: responseText, sources } = await generateChatResponse(text, mode, chatHistory.current, image);
-        aiResponse = {
-          id: Date.now().toString() + '-ai',
-          sender: Sender.AI,
-          text: responseText,
-          sources: sources.length > 0 ? sources : undefined,
-        };
-        chatHistory.current.push({ role: 'model', parts: [{ text: responseText }] });
-      }
+      const stream = sendMessageStream(history, text, image, selectedModel);
+      let fullResponseText = '';
+      
+      for await (const chunk of stream) {
+        fullResponseText += chunk.text;
+        
+        const groundingMetadata = chunk.candidates?.[0]?.groundingMetadata;
+        const sources = groundingMetadata?.groundingChunks
+            ?.map((gc: any) => gc.web || gc.maps)
+            .filter(Boolean)
+            .map((s: any) => ({ uri: s.uri, title: s.title })) || [];
 
-      if (aiResponse) {
-        setMessages(prev => [...prev, aiResponse!]);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === botMessageId ? { ...msg, text: fullResponseText, sources } : msg
+          )
+        );
       }
+      setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === botMessageId ? { ...msg, isStreaming: false } : msg
+          )
+        );
+
     } catch (error) {
-      console.error("Error with Gemini API:", error);
-      const errorMessage: Message = {
-        id: Date.now().toString() + '-error',
-        sender: Sender.System,
-        text: 'Sorry, I encountered an error. Please try again.',
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      console.error('Error sending message:', error);
+       setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === botMessageId ? { ...msg, text: 'Sorry, something went wrong.', isStreaming: false } : msg
+          )
+        );
     } finally {
       setIsLoading(false);
     }
-  }, [mode, hasStartedChat]);
-  
-  const handleModeChange = (newMode: Mode) => {
-    setMode(newMode);
-    if(hasStartedChat) {
-        chatHistory.current = []; 
-        const systemMessageText = newMode === ModeEnum.Live 
-          ? "Live conversation mode activated. Click 'Start Conversation' below."
-          : `Switched to ${newMode} mode.`;
-          
-        setMessages(prev => [...prev, {
-          id: 'mode-change-' + Date.now(),
-          sender: Sender.System,
-          text: systemMessageText,
-        }]);
-    }
-  };
-
-  const handleNewChat = () => {
-    setHasStartedChat(false);
-    setMessages([]);
-    chatHistory.current = [];
-    setMode(ModeEnum.Chat);
   };
 
   return (
-    <div className="flex h-screen">
-      <div className="flex flex-col flex-1 relative bg-[#1e1f20]">
-        {!hasStartedChat && mode !== ModeEnum.Live ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-4">
-            <div className="w-full max-w-3xl mx-auto flex flex-col items-center">
-              <h1 dir="rtl" className="text-5xl font-medium mb-12 text-center bg-gradient-to-r from-blue-400 to-blue-300 bg-clip-text text-transparent">
-                <span className="text-gray-400">مرحباً,</span> Amer
-              </h1>
-              <InputBar 
-                  onSendMessage={handleSendMessage} 
-                  isLoading={isLoading} 
-                  mode={mode} 
-                  onModeChange={handleModeChange}
-                  isCentered={true} 
-              />
-            </div>
-          </div>
+    <div className="flex flex-col h-screen bg-brand-dark text-gray-100 font-sans">
+       <style>{`
+        .prose { max-width: none; }
+        .streaming-cursor {
+          display: inline-block;
+          width: 10px;
+          height: 1.2rem;
+          background-color: currentColor;
+          animation: blink 1s step-end infinite;
+          vertical-align: bottom;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+      `}</style>
+      
+      <main className="flex-1 flex flex-col items-center overflow-y-auto p-4 md:p-6">
+        {messages.length > 0 ? (
+          <ChatWindow messages={messages} />
         ) : (
-          <>
-            <main className="flex-1 overflow-y-auto p-4 flex flex-col">
-              {mode === ModeEnum.Live ? (
-                 <LiveConversation />
-              ) : (
-                <ChatWindow messages={messages} isLoading={isLoading} />
-              )}
-            </main>
-            {mode !== ModeEnum.Live && (
-                 <footer className="p-4 bg-[#1e1f20]">
-                   <InputBar 
-                      onSendMessage={handleSendMessage} 
-                      isLoading={isLoading} 
-                      mode={mode}
-                      onModeChange={handleModeChange}
-                      isCentered={false}
-                   />
-                 </footer>
-            )}
-          </>
+          <WelcomeHeader />
         )}
+      </main>
+      
+      <div className={`w-full max-w-3xl mx-auto px-4 md:px-0 ${messages.length > 0 ? 'pb-4' : 'pb-10'}`}>
+        <InputBar 
+            onSendMessage={handleSendMessage} 
+            isLoading={isLoading} 
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+        />
       </div>
-      <RightSidebar onNewChat={handleNewChat} />
     </div>
   );
-};
+}
 
 export default App;

@@ -1,164 +1,180 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-// FIX: Replaced non-existent `LiveSession` type with `Connection`.
-import type { Connection } from "@google/genai";
-import { SendIcon } from './icons/SendIcon';
-import { ImageIcon } from './icons/ImageIcon';
+import React, { useState, useRef, useEffect } from 'react';
+// Fix: Removed unused SendIcon import as the component file is empty and not used.
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
-import type { ImageData, Mode } from '../types';
-import { Mode as ModeEnum } from '../types';
-import { transcribeAudio } from '../services/geminiService';
-import { createPcmBlob } from '../utils/audioUtils';
-
-const ChevronDownIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-    </svg>
-);
-
-const PlusIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-    </svg>
-);
-
-const SearchIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-    </svg>
-);
+import { ModelType } from '../types';
+import { CheckIcon } from './icons/CheckIcon';
+import { SearchIcon } from './icons/SearchIcon';
+import { ImageIcon } from './icons/ImageIcon';
+import { CanvasIcon } from './icons/CanvasIcon';
+import { BookIcon } from './icons/BookIcon';
+import { UploadIcon } from './icons/UploadIcon';
+import { DriveIcon } from './icons/DriveIcon';
 
 
 interface InputBarProps {
-  onSendMessage: (text: string, image?: ImageData | null) => void;
+  onSendMessage: (text: string, image: string | null) => void;
   isLoading: boolean;
-  mode: Mode;
-  onModeChange: (mode: Mode) => void;
-  isCentered: boolean;
+  selectedModel: ModelType;
+  setSelectedModel: (model: ModelType) => void;
 }
 
-export const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading, mode, onModeChange, isCentered }) => {
+export const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading, selectedModel, setSelectedModel }) => {
   const [text, setText] = useState('');
-  const [image, setImage] = useState<ImageData | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  // FIX: Replaced non-existent `LiveSession` type with `Connection`.
-  const sessionPromiseRef = useRef<Promise<Connection> | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const [image, setImage] = useState<string | null>(null);
+  const [activePopup, setActivePopup] = useState<'model' | 'tools' | 'upload' | null>(null);
 
-  const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const popupsRef = useRef<HTMLDivElement>(null);
 
   const handleSend = () => {
-    if (isLoading || (!text.trim() && !image)) return;
-    onSendMessage(text, image);
-    setText('');
-    setImage(null);
-    if (fileInputRef.current) {
-        fileInputRef.current.value = "";
+    if ((text.trim() || image) && !isLoading) {
+      onSendMessage(text, image);
+      setText('');
+      setImage(null);
     }
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = (reader.result as string).split(',')[1];
-        setImage({ base64: base64String, mimeType: file.type });
-      };
-      reader.readAsDataURL(file);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
+  
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+        textarea.style.height = 'auto';
+        const scrollHeight = textarea.scrollHeight;
+        textarea.style.height = `${scrollHeight}px`;
+    }
+  }, [text]);
 
-  const stopTranscription = useCallback(() => {
-    // ... (transcription logic is unchanged)
-  }, []);
-  
-  const startTranscription = async () => {
-    // ... (transcription logic is unchanged)
-  };
-  
-  const toggleRecording = () => {
-    // ... (transcription logic is unchanged)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          const file = e.target.files[0];
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setImage(reader.result as string);
+          };
+          reader.readAsDataURL(file);
+      }
   };
 
   useEffect(() => {
-      return () => { stopTranscription(); }
-  }, [stopTranscription]);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (popupsRef.current && !popupsRef.current.contains(event.target as Node)) {
+        setActivePopup(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
-  const modelOptions = [
-    { mode: ModeEnum.Chat, label: "2.5 Flash" },
-    { mode: ModeEnum.ChatLite, label: "2.5 Flash Lite" },
-    { mode: ModeEnum.Thinking, label: "2.5 Pro" },
-  ];
-  const currentModelLabel = modelOptions.find(o => o.mode === mode)?.label || mode;
-
-  const placeholderText = isCentered ? "اسأل Gemini" : "Enter a message...";
-  const containerClass = isCentered 
-    ? "bg-[#303134] rounded-full p-2 flex items-center gap-4 shadow-lg w-full"
-    : "bg-[#303134] p-2 rounded-2xl flex items-center gap-2 max-w-4xl mx-auto w-full";
-  const isImageMode = mode === ModeEnum.ImageUnderstand;
+  const togglePopup = (popup: 'model' | 'tools' | 'upload') => {
+    setActivePopup(activePopup === popup ? null : popup);
+  };
   
+  const handleModelSelect = (model: ModelType) => {
+    setSelectedModel(model);
+    setActivePopup(null);
+  }
+
   return (
-    <div className={containerClass} onClick={() => { setModelSelectorOpen(false); setToolsOpen(false); }}>
-      <button onClick={toggleRecording} className="p-2 rounded-full hover:bg-gray-700/50 flex-shrink-0">
-        <MicrophoneIcon />
-      </button>
-
-      <div className="relative flex-shrink-0">
-        <button onClick={(e) => {e.stopPropagation(); setModelSelectorOpen(o => !o); setToolsOpen(false); }} className="flex items-center gap-1 text-gray-300 hover:text-white px-2 py-1 rounded-md hover:bg-gray-700/50">
-            <span>{currentModelLabel}</span>
-            <ChevronDownIcon />
-        </button>
-        {modelSelectorOpen && (
-            <div className="absolute bottom-full mb-2 w-48 bg-[#303134] border border-gray-600/50 rounded-lg shadow-xl p-2 z-10">
-                {modelOptions.map(opt => (
-                    <button key={opt.mode} onClick={() => { onModeChange(opt.mode); setModelSelectorOpen(false); }} className="block w-full text-left p-2 rounded hover:bg-gray-600/80">{opt.label}</button>
-                ))}
-            </div>
-        )}
-      </div>
-
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
-        placeholder={placeholderText}
-        className="flex-1 bg-transparent text-gray-200 resize-none focus:outline-none text-lg p-2 placeholder-gray-500"
-        rows={1}
-        disabled={isLoading}
-      />
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
-      
-      <div className="relative flex-shrink-0">
-        <button onClick={(e) => { e.stopPropagation(); isImageMode ? fileInputRef.current?.click() : setToolsOpen(o => !o); setModelSelectorOpen(false);}} className="p-2 rounded-full hover:bg-gray-700/50">
-            {isImageMode ? <ImageIcon /> : <PlusIcon />}
-        </button>
-        {toolsOpen && (
-            <div className="absolute bottom-full right-0 mb-2 w-64 bg-[#303134] border border-gray-600/50 rounded-lg shadow-xl p-2 z-10">
-                <button onClick={() => onModeChange(ModeEnum.SearchGrounding)} className="flex items-center gap-3 w-full text-left p-3 rounded hover:bg-gray-600/80">
-                    <SearchIcon /> <span>Deep Research</span>
+    <div className="bg-brand-gray-800 rounded-2xl shadow-lg p-3 flex flex-col relative" ref={popupsRef}>
+        {/* Model Selector Popup */}
+        {activePopup === 'model' && (
+            <div className="absolute bottom-full mb-2 w-72 bg-brand-popup rounded-lg shadow-xl p-2">
+               <p className="text-sm text-gray-400 px-3 py-2">يمكنك اختيار النموذج الذي يناسبك</p>
+                <button onClick={() => handleModelSelect('flash')} className="w-full text-left px-3 py-2 hover:bg-brand-gray-700 rounded-md flex justify-between items-center">
+                    <div>
+                        <p>مساعدة شاملة سريعة</p>
+                        <p className="text-xs text-gray-400">2.5 Flash</p>
+                    </div>
+                    {selectedModel === 'flash' && <CheckIcon />}
                 </button>
-                <button onClick={() => onModeChange(ModeEnum.ImageGen)} className="flex items-center gap-3 w-full text-left p-3 rounded hover:bg-gray-600/80">
-                    <ImageIcon /> <span>صور باستخدام Imagen</span>
-                </button>
-                 <button onClick={() => onModeChange(ModeEnum.ImageUnderstand)} className="flex items-center gap-3 w-full text-left p-3 rounded hover:bg-gray-600/80">
-                    <ImageIcon /> <span>Image Understanding</span>
+                <button onClick={() => handleModelSelect('pro')} className="w-full text-left px-3 py-2 hover:bg-brand-gray-700 rounded-md flex justify-between items-center">
+                    <div>
+                        <p>الاستدلال، والرياضيات والترميز</p>
+                        <p className="text-xs text-gray-400">2.5 Pro</p>
+                    </div>
+                    {selectedModel === 'pro' && <CheckIcon />}
                 </button>
             </div>
         )}
-      </div>
-      
-      {!isCentered && (
-        <button 
-          onClick={handleSend}
-          disabled={isLoading || (!text.trim() && !image)}
-          className="p-3 bg-blue-600 rounded-full hover:bg-blue-500 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-        >
-          <SendIcon />
-        </button>
-      )}
+
+        {/* Tools Popup */}
+         {activePopup === 'tools' && (
+            <div className="absolute bottom-full mb-2 right-0 w-60 bg-brand-popup rounded-lg shadow-xl p-2">
+                <button className="w-full text-left px-3 py-2 hover:bg-brand-gray-700 rounded-md flex items-center">
+                    <SearchIcon /> <span className="ml-3">Deep Research</span>
+                </button>
+                <button className="w-full text-left px-3 py-2 hover:bg-brand-gray-700 rounded-md flex items-center">
+                   <ImageIcon /> <span className="ml-3">صور باستخدام Imagen</span>
+                </button>
+                 <button className="w-full text-left px-3 py-2 hover:bg-brand-gray-700 rounded-md flex items-center">
+                   <CanvasIcon /> <span className="ml-3">Canvas</span>
+                </button>
+                 <button className="w-full text-left px-3 py-2 hover:bg-brand-gray-700 rounded-md flex items-center">
+                   <BookIcon /> <span className="ml-3">التعلم الموجه</span>
+                </button>
+            </div>
+        )}
+
+         {/* Upload Popup */}
+         {activePopup === 'upload' && (
+            <div className="absolute bottom-full mb-2 right-0 w-60 bg-brand-popup rounded-lg shadow-xl p-2">
+                <button onClick={() => fileInputRef.current?.click()} className="w-full text-left px-3 py-2 hover:bg-brand-gray-700 rounded-md flex items-center">
+                    <UploadIcon /> <span className="ml-3">تحميل ملفات</span>
+                </button>
+                 <button className="w-full text-left px-3 py-2 hover:bg-brand-gray-700 rounded-md flex items-center">
+                   <DriveIcon /> <span className="ml-3">إضافة ملفات من Drive</span>
+                </button>
+            </div>
+        )}
+
+
+        {image && (
+            <div className="mb-2">
+                <img src={image} alt="upload preview" className="max-h-40 rounded-lg" />
+            </div>
+        )}
+        <div className="flex items-end">
+            <button className="p-2 text-gray-400 hover:text-gray-200 self-center">
+                <MicrophoneIcon />
+            </button>
+            <button onClick={() => togglePopup('model')} className="p-2 text-gray-400 hover:text-gray-200 self-center rounded-md flex items-center">
+                <span>{selectedModel === 'flash' ? '2.5 Flash' : '2.5 Pro'}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+            </button>
+
+            <textarea
+                ref={textareaRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="اسأل Gemini"
+                className="flex-1 bg-transparent border-none focus:ring-0 resize-none max-h-56 min-h-[52px] overflow-y-auto px-2 py-2 w-full text-right"
+                disabled={isLoading}
+            />
+            <button onClick={() => togglePopup('tools')} className="p-2 text-gray-400 hover:text-gray-200 self-center rounded-md flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z" />
+                </svg>
+                <span className="mx-2">الأدوات</span>
+            </button>
+            <button onClick={() => togglePopup('upload')} className="p-2 text-gray-400 hover:text-gray-200 self-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+            </button>
+            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+        </div>
     </div>
   );
 };

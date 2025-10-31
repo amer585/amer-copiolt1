@@ -1,6 +1,6 @@
 {
-  "name": "Gemini AI Studio",
-  "description": "A comprehensive web application showcasing the power of the Gemini API. Engage in multi-modal chat, generate images, transcribe audio, have real-time voice conversations, and leverage grounded search for accurate, up-to-date information.",
+  "name": "Amer Copilot",
+  "description": "An AI-powered chat assistant built with the Gemini API. Engage in text-based conversations or have a live, voice-based dialogue.",
   "requestFramePermissions": [
     "microphone"
   ]
