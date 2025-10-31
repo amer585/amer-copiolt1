@@ -15,7 +15,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ messages }) => {
 
   return (
     <div className="max-w-3xl mx-auto w-full flex-1">
-        <div className="space-y-6">
+        <div className="space-y-8">
             {messages.map((msg) => (
                 <Message key={msg.id} message={msg} />
             ))}

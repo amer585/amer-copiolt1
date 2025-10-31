@@ -1,6 +1,6 @@
 {
-  "name": "Amer Copilot",
-  "description": "An AI-powered chat assistant built with the Gemini API. Engage in text-based conversations or have a live, voice-based dialogue.",
+  "name": "Gemini Copilot",
+  "description": "Your AI-powered chat assistant built with the Gemini API. Engage in text-based conversations or have a live, voice-based dialogue.",
   "requestFramePermissions": [
     "microphone"
   ]
