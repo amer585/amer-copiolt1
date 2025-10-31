@@ -1,6 +1,6 @@
-
 import React, { useState, useRef, useCallback } from 'react';
-import type { LiveSession, LiveServerMessage } from '@google/genai';
+// FIX: Replaced non-existent `LiveSession` type with `Connection`.
+import type { Connection, LiveServerMessage } from '@google/genai';
 import { connectLiveSession } from '../services/geminiService';
 import { decode, decodeAudioData, createPcmBlob } from '../utils/audioUtils';
 
@@ -14,7 +14,8 @@ export const LiveConversation: React.FC = () => {
     const [status, setStatus] = useState('Idle');
     const [transcriptions, setTranscriptions] = useState<TranscriptionEntry[]>([]);
 
-    const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
+    // FIX: Replaced non-existent `LiveSession` type with `Connection`.
+    const sessionPromiseRef = useRef<Promise<Connection> | null>(null);
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
     const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
@@ -69,18 +70,9 @@ export const LiveConversation: React.FC = () => {
             const source = inputAudioContextRef.current.createMediaStreamSource(stream);
             scriptProcessorRef.current = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
 
-            scriptProcessorRef.current.onaudioprocess = (audioProcessingEvent) => {
-                const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                const pcmBlob = createPcmBlob(inputData);
-                if (sessionPromiseRef.current) {
-                    sessionPromiseRef.current.then(session => session.sendRealtimeInput({ media: pcmBlob }));
-                }
-            };
-            
-            source.connect(scriptProcessorRef.current);
-            scriptProcessorRef.current.connect(inputAudioContextRef.current.destination);
-
-            sessionPromiseRef.current = connectLiveSession({
+            // FIX: Create the session promise before setting up the audio processor
+            // to avoid race conditions and adhere to API guidelines.
+            const sessionPromise = connectLiveSession({
                 onopen: () => {
                     setIsLive(true);
                     setStatus('Connected. Speak now...');
@@ -98,6 +90,19 @@ export const LiveConversation: React.FC = () => {
                     stopConversation();
                 },
             });
+
+            sessionPromiseRef.current = sessionPromise;
+
+            scriptProcessorRef.current.onaudioprocess = (audioProcessingEvent) => {
+                const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                const pcmBlob = createPcmBlob(inputData);
+                // FIX: Removed conditional check and directly use the promise
+                // as per the API guidelines to prevent race conditions.
+                sessionPromise.then(session => session.sendRealtimeInput({ media: pcmBlob }));
+            };
+            
+            source.connect(scriptProcessorRef.current);
+            scriptProcessorRef.current.connect(inputAudioContextRef.current.destination);
 
         } catch (error) {
             console.error("Failed to start microphone:", error);
@@ -150,20 +155,25 @@ export const LiveConversation: React.FC = () => {
 
 
     return (
-        <div className="flex flex-col h-full items-center justify-center p-4 bg-gray-800/50 rounded-lg">
-            <div className="w-full max-w-2xl flex-1 overflow-y-auto bg-gray-900/70 p-4 rounded-t-lg">
-                <h3 className="text-lg font-semibold mb-4 text-cyan-400">Live Transcript</h3>
+        <div className="flex flex-col h-full items-center justify-center p-4 bg-[#202124]/50 rounded-lg">
+            <div className="w-full max-w-2xl flex-1 overflow-y-auto bg-black/20 p-4 rounded-t-lg">
+                <h3 className="text-lg font-semibold mb-4 text-blue-300">Live Transcript</h3>
                 <div className="space-y-4">
                     {transcriptions.map((t, i) => (
                         <div key={i} className={`flex ${t.speaker === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <p className={`p-3 rounded-lg max-w-lg ${t.speaker === 'user' ? 'bg-cyan-600/70 text-white' : 'bg-gray-700'}`}>
+                            <p className={`p-3 rounded-lg max-w-lg ${t.speaker === 'user' ? 'bg-blue-600/80 text-white' : 'bg-[#303134]'}`}>
                                 <span className="font-bold capitalize">{t.speaker}: </span>{t.text}
                             </p>
                         </div>
                     ))}
+                     {isLive && !status.startsWith('Connected') && (
+                         <div className="flex justify-center items-center p-4">
+                           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-400"></div>
+                         </div>
+                     )}
                 </div>
             </div>
-            <div className="w-full max-w-2xl bg-gray-800 p-4 rounded-b-lg flex flex-col items-center">
+            <div className="w-full max-w-2xl bg-[#2a2b2e] p-4 rounded-b-lg flex flex-col items-center">
                  <p className="text-gray-400 mb-4 h-6">{status}</p>
                 <button
                     onClick={isLive ? stopConversation : startConversation}

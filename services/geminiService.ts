@@ -1,5 +1,6 @@
 
-import { GoogleGenAI, Modality, type GenerateContentResponse, type GroundingChunk, type LiveSession, type LiveCallbacks } from "@google/genai";
+
+import { GoogleGenAI, Modality, type GenerateContentResponse, type GroundingChunk, type Connection, type LiveCallbacks } from "@google/genai";
 import type { ImageData, Mode, GroundingSource } from '../types';
 import { Mode as ModeEnum } from '../types';
 
@@ -49,21 +50,20 @@ export const generateChatResponse = async (
     }
 
     const config: any = {};
-    const tools: any[] = [];
     
     if (mode === ModeEnum.Thinking) {
         config.thinkingConfig = { thinkingBudget: 32768 };
     }
     
     if (mode === ModeEnum.SearchGrounding) {
-        tools.push({ googleSearch: {} });
+        // FIX: The 'tools' property must be inside the 'config' object.
+        config.tools = [{ googleSearch: {} }];
     }
     
     const response: GenerateContentResponse = await getAi().models.generateContent({
         model: model,
         contents: [...history, contents],
         config: Object.keys(config).length > 0 ? config : undefined,
-        tools: tools.length > 0 ? tools : undefined,
     });
 
     const text = response.text;
@@ -122,7 +122,8 @@ export const generateSpeech = async (text: string): Promise<string> => {
     throw new Error("TTS generation failed.");
 };
 
-export const connectLiveSession = async (callbacks: LiveCallbacks): Promise<LiveSession> => {
+// FIX: Replaced non-existent `LiveSession` type with `Connection`.
+export const connectLiveSession = async (callbacks: LiveCallbacks): Promise<Connection> => {
     return getAi().live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         callbacks: callbacks,
@@ -138,11 +139,15 @@ export const connectLiveSession = async (callbacks: LiveCallbacks): Promise<Live
     });
 };
 
-export const transcribeAudio = async (callbacks: LiveCallbacks): Promise<LiveSession> => {
+// FIX: Replaced non-existent `LiveSession` type with `Connection`.
+export const transcribeAudio = async (callbacks: LiveCallbacks): Promise<Connection> => {
      return getAi().live.connect({
-        model: 'gemini-2.5-flash',
+        // FIX: Using the correct model for Live API.
+        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         callbacks: callbacks,
         config: {
+            // FIX: `responseModalities` is required for Live API calls.
+            responseModalities: [Modality.AUDIO],
             inputAudioTranscription: {},
         },
     });

@@ -1,50 +1,40 @@
-
 import React from 'react';
-import type { Mode } from '../types';
-import { Mode as ModeEnum } from '../types';
 
-interface SidebarProps {
-  currentMode: Mode;
-  onModeChange: (mode: Mode) => void;
+const ExpandIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-300" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+        <path d="M4 8v-2a2 2 0 0 1 2 -2h2" />
+        <path d="M4 16v2a2 2 0 0 0 2 2h2" />
+        <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+        <path d="M16 20h2a2 2 0 0 0 2 -2v-2" />
+    </svg>
+)
+
+const SettingsIcon = () => (
+    <svg xmlns="http://www.w.org/2000/svg" className="h-6 w-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+);
+
+
+interface RightSidebarProps {
+  onNewChat?: () => void;
 }
 
-const ModeButton: React.FC<{
-    mode: Mode;
-    currentMode: Mode;
-    onClick: (mode: Mode) => void;
-    children: React.ReactNode
-}> = ({ mode, currentMode, onClick, children }) => {
-    const isActive = mode === currentMode;
-    return (
-        <button
-            onClick={() => onClick(mode)}
-            className={`w-full text-left p-3 rounded-lg transition-all duration-200 ease-in-out flex items-center gap-3 ${
-                isActive
-                    ? 'bg-cyan-500/20 text-cyan-300 font-semibold'
-                    : 'text-gray-400 hover:bg-gray-700/50 hover:text-white'
-            }`}
-        >
-            {children}
-        </button>
-    );
-};
-
-export const Sidebar: React.FC<SidebarProps> = ({ currentMode, onModeChange }) => {
+export const Sidebar: React.FC<RightSidebarProps> = ({ onNewChat }) => {
   return (
-    <nav className="w-64 bg-gray-800/80 p-4 flex flex-col border-r border-gray-700/50">
-        <div className="mb-8">
-            <h2 className="text-lg font-bold text-white">Modes</h2>
-            <p className="text-xs text-gray-500">Select a feature</p>
-        </div>
-        <div className="space-y-2">
-            <ModeButton mode={ModeEnum.Chat} currentMode={currentMode} onClick={onModeChange}>Chat</ModeButton>
-            <ModeButton mode={ModeEnum.ChatLite} currentMode={currentMode} onClick={onModeChange}>Chat (Lite)</ModeButton>
-            <ModeButton mode={ModeEnum.Thinking} currentMode={currentMode} onClick={onModeChange}>Thinking Mode</ModeButton>
-            <ModeButton mode={ModeEnum.SearchGrounding} currentMode={currentMode} onClick={onModeChange}>Search Grounding</ModeButton>
-            <ModeButton mode={ModeEnum.ImageUnderstand} currentMode={currentMode} onClick={onModeChange}>Image Understanding</ModeButton>
-            <ModeButton mode={ModeEnum.ImageGen} currentMode={currentMode} onClick={onModeChange}>Image Generation</ModeButton>
-            <ModeButton mode={ModeEnum.Live} currentMode={currentMode} onClick={onModeChange}>Live Conversation</ModeButton>
-        </div>
-    </nav>
+    <div className="bg-[#131314] p-2 flex flex-col justify-between items-center h-full">
+      <div>
+        <button onClick={onNewChat} title="New Chat" className="p-3 rounded-full hover:bg-gray-800/80 transition-colors">
+          <ExpandIcon />
+        </button>
+      </div>
+      <div>
+        <button title="Settings" className="p-3 rounded-full hover:bg-gray-800/80 transition-colors">
+          <SettingsIcon />
+        </button>
+      </div>
+    </div>
   );
 };
