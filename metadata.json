@@ -1,0 +1,7 @@
+{
+  "name": "Gemini AI Studio",
+  "description": "A comprehensive web application showcasing the power of the Gemini API. Engage in multi-modal chat, generate images, transcribe audio, have real-time voice conversations, and leverage grounded search for accurate, up-to-date information.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
